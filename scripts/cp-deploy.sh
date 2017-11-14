@@ -66,7 +66,7 @@ LOG=/tmp/cp-deploy.log
 # Extract useful details from the AWS MetaData
 # The information there should be treated as the source of truth,
 # even if the internal settings are temporarily incorrect.
-murl_top=http://instance-data/latest/meta-data
+murl_top=http://169.254.169.254/latest/meta-data
 
 THIS_FQDN=$(curl -f -s $murl_top/hostname)
 [ -z "${THIS_FQDN}" ] && THIS_FQDN=$(hostname --fqdn)

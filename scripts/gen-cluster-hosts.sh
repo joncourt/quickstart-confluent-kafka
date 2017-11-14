@@ -39,7 +39,7 @@
 # those autoscaling groups are found, the node list will default to
 # the list from /tmp/brokers.
 
-murl_top=http://instance-data/latest/meta-data
+murl_top=http://169.254.169.254/latest/meta-data
 
 CP_HOSTS_FILE=${CP_HOSTS_FILE:-/tmp/cphosts}
 

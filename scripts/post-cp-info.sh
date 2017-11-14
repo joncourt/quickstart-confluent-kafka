@@ -51,7 +51,7 @@ fi
 #	REMEMBER: ami-launch-index will ALWAYS be 0 for spot instances
 #
 THIS_HOST=`/bin/hostname -s`
-murl_top=http://instance-data/latest/meta-data
+murl_top=http://169.254.169.254/latest/meta-data
 broker_index=$(curl -f -s $murl_top/ami-launch-index)
 if [ -r /tmp/brokers ] ; then
 	hindex=$(grep -n `hostname -s` /tmp/brokers | cut -d: -f1)
@@ -152,7 +152,7 @@ fi
 
 # We need to know our region for the aws commands
 #
-murl_top=http://instance-data/latest/meta-data
+murl_top=http://169.254.169.254/latest/meta-data
 THIS_AZ=$(curl -f -s ${murl_top}/placement/availability-zone)
 THIS_REGION=${THIS_AZ%[a-z]}
 
