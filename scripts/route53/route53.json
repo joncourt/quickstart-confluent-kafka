@@ -1,0 +1,87 @@
+"UserData": {
+  "Fn::Base64": {
+    "Fn::Join": [
+      "",
+      [
+        "#!/bin/bash\n",
+        "exec >/var/log/bootstrap.log 2>&1\n",
+        "EC2_AUTO_SCALING_GROUP='yes'\n",
+        "ROLE='docker'\n",
+        "DOMAIN='",
+        {
+          "Ref": "Domain"
+        },
+        "'\n",
+        "ORGANISATION='",
+        {
+          "Ref": "Organisation"
+        },
+        "'\n",
+        "PROJECT='",
+        {
+          "Ref": "Project"
+        },
+        "'\n",
+        "STACKNAME='",
+        {
+          "Ref": "StackName"
+        },
+        "'\n",
+        "ENVIRONMENT='",
+        {
+          "Ref": "Environment"
+        },
+        "'\n",
+        "RELEASESTAGE='",
+        {
+          "Ref": "ReleaseStage"
+        },
+        "'\n",
+        "BRANCH='",
+        {
+          "Ref": "Branch"
+        },
+        "'\n",
+        "SALT_MASTER_IP='",
+        {
+          "Fn::GetAtt": [
+            "InstanceMaster01",
+            "PrivateIp"
+          ]
+        },
+        "'\n",
+        "HOSTED_ZONE_ID='",
+        {
+          "Ref": "Route53HostedZoneArn"
+        },
+        "'\n",
+        "export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n",
+        "export DOMAIN ROLE ORGANISATION PROJECT STACKNAME ENVIRONMENT RELEASESTAGE BRANCH\n",
+        "export EC2_AUTO_SCALING_GROUP\n",
+        "export SALT_MASTER_IP\n",
+        "export HOSTED_ZONE_ID\n",
+        "aws --color=off s3 cp --quiet ",
+        {
+          "Ref": "BootstrapBucketURL"
+        },
+        "compute/bootstrap.sh - | bash -s\n",
+        "aws --color=off s3 cp --quiet ",
+        {
+          "Ref": "BootstrapBucketURL"
+        },
+        "compute/route53/route53.init /etc/init.d/route53\n",
+        "chown root:root /etc/init.d/route53\n",
+        "chmod 755 /etc/init.d/route53\n",
+        "update-rc.d route53 start 99 2 3 5 . stop 99 0 6 .\n",
+        "aws --color=off s3 cp --quiet ",
+        {
+          "Ref": "BootstrapBucketURL"
+        },
+        "compute/route53/route53.sh /usr/local/sbin/route53\n",
+        "chown root:root /usr/local/sbin/route53\n",
+        "chmod 755 /usr/local/sbin/route53\n",
+        "/usr/local/sbin/route53 --add\n"
+      ]
+    ]
+  }
+}

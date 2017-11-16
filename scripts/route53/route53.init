@@ -1,0 +1,47 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          route53
+# Required-Start:    $local_fs $network
+# Required-Stop:     $local_fs $network
+# Should-Start:      $network
+# Should-Stop:       $network
+# Default-Start:     2 3 5
+# Default-Stop:      0 6
+# Short-Description: Add and/or remove a DNS entry in Route53
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+SCRIPT_NAME="/etc/init.d/$(basename -- $0)"
+ROUTE53_BINARY="/usr/local/sbin/route53"
+
+case "$1" in
+    start)
+        log_daemon_msg 'Adding a DNS entry into Route53 ...'
+        $ROUTE53_BINARY --add >/dev/null 2>&1
+        log_end_msg $?
+    ;;
+    stop)
+        log_daemon_msg 'Removing a DNS entry from Route53 ...'
+        $ROUTE53_BINARY --check >/dev/null 2>&1
+        case $? in
+            0)
+                $ROUTE53_BINARY --remove >/dev/null 2>&1
+                log_end_msg $?
+            ;;
+            1) log_end_msg 0 ;;
+        esac
+    ;;
+    status)
+        log_daemon_msg 'Checking if a DNS entry exists in Route53 ...'
+        $ROUTE53_BINARY --check >/dev/null 2>&1
+        log_end_msg $?
+    ;;
+    *)
+        log_action_msg "Usage: $SCRIPT_NAME {start|stop|status}" >&2
+        exit 3
+    ;;
+esac
