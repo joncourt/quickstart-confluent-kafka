@@ -16,11 +16,12 @@
 #
 # This script is to be installed as /usr/local/sbin/route53.
 #
+LOG=/tmp/cp-route53.log
 
 export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 readonly ROUTE53_DEFAULT='/etc/default/route53'
-readonly EC2_METADATA_URL='http://169.254.169.254/latest/meta-data'
+readonly murl_top='http://169.254.169.254/latest/meta-data'
 readonly LOCK_FILE="/var/lock/$(basename -- "$0").lock"
 
 # Make sure files are 644 and directories are 755.
@@ -34,7 +35,7 @@ if [[ -f $ROUTE53_DEFAULT ]]; then
     # have been passed down in the bootstrap process.
     source $ROUTE53_DEFAULT
 else
-    echo "Unable to load environment variables from '$ROUTE53_DEFAULT', aborting..."
+    echo "Unable to load environment variables from '$ROUTE53_DEFAULT', aborting..." >>$LOG
     exit 1
 fi
 
@@ -65,24 +66,33 @@ EOS
         exit 1
     ;;
     *)
-        echo "Unknown or no action given, aborting..."
+        echo "Unknown or no action given, aborting..." >> $LOG
         exit 1
     ;;
 esac
 
 # Check if environment variables are present and non-empty.
-REQUIRED=( TTL HOSTED_ZONE_ID INSTANCE_ID REGION )
+REQUIRED=(HOSTED_ZONE_ID TTL)
 for v in ${REQUIRED[@]}; do
     eval VALUE='$'${v}
     if [[ -z $VALUE ]]; then
-        echo "The '$v' environment variable has to be set, aborting..."
+        echo "The '$v' environment variable has to be set, aborting..." >> $LOG
         exit 1
     fi
 done
 
+ThisRegion=$(curl -f ${murl_top}/placement/availability-zone 2> /dev/null)
+if [ -z "$ThisRegion" ] ; then
+	ThisRegion="us-east-1"
+else
+	ThisRegion="${ThisRegion%[a-z]}"
+fi
+
 if (set -o noclobber; echo $$ > $LOCK_FILE) &>/dev/null; then
     # Make a secure temporary file name, needed later.
     TEMPORARY_FILE=$(mktemp -ut "$(basename $0).XXXXXXXX")
+    echo "TempFile = $TEMPORARY_FILE"
+
 
     # Make sure to remove the temporary
     # file when terminating, and clean-up
@@ -91,8 +101,11 @@ if (set -o noclobber; echo $$ > $LOCK_FILE) &>/dev/null; then
         "rm -f $LOCK_FILE $TEMPORARY_FILE; exit" \
             HUP INT KILL TERM QUIT EXIT
 
+    echo "Done Trap"
+
     # Fetch current private IP address of this instance.
-    INSTANCE_IPV4=$(curl -s ${EC2_METADATA_URL}/local-ipv4)
+    INSTANCE_IPV4=$(curl -s ${murl_top}/local-ipv4 2>/dev/null)
+    INSTANCE_ID=$(curl -f -s ${murl_top}/instance-id 2> /dev/null)
 
     # Fetch current "Name" tag that was set for this
     # instance, as it will be used when adding (or
@@ -104,34 +117,38 @@ if (set -o noclobber; echo $$ > $LOCK_FILE) &>/dev/null; then
         aws ec2 describe-tags \
             --query 'Tags[*].Value' \
             --filters "Name=resource-id,Values=${INSTANCE_ID}" 'Name=key,Values=Name' \
-            --region $REGION --output text 2>/dev/null
+            --region $ThisRegion --output text 2>/dev/null
     )
 
     # Make sure that the "Name" tag was actually set.
     if [[ "x${INSTANCE_NAME_TAG}" == "x" ]]; then
-        echo "The 'Name' tag is empty or has not been set, aborting..."
+        echo "The 'Name' tag is empty or has not been set, aborting..." >> $LOG
         exit 1
     fi
+
+    HOSTED_ZONE_DN=$(aws route53 get-hosted-zone --id  ${HOSTED_ZONE_ID} --query 'HostedZone.Name' --output text 2>/dev/null)
+
+    QUALIFIED_DOMAIN_NAME="${INSTANCE_NAME_TAG}.${HOSTED_ZONE_DN}"
 
     if [[ $ACTION == 'CHECK' ]]; then
         # Fetch details (about every resource) about given Hosted
         # Zone from Route53 and format to make it easier to search
         # for a particular entry. Since the amount of records can
         # often be quiet large, store it in a temporary file.
-        aws --color=off route53 list-resource-record-sets \
+        RESOURCE_SETS=$(aws --color=off route53 list-resource-record-sets \
             --query 'ResourceRecordSets[*].[Type,TTL,Name,ResourceRecords[0].Value]' \
-            --hosted-zone-id $HOSTED_ZONE_ID --region $REGION --output text | \
-                sed -e 's/\s/,/g' 2>/dev/null > $TEMPORARY_FILE
+            --hosted-zone-id $HOSTED_ZONE_ID --region $ThisRegion --output text | \
+                sed -e 's/\s/,/g' 2>/dev/null)
 
         # Assemble entry for this instance.
-        RESOURCE=$(printf "%s,%s,%s.,%s" "A" "$TTL" "$INSTANCE_NAME_TAG" "$INSTANCE_IPV4")
-        if grep -q $RESOURCE $TEMPORARY_FILE &>/dev/null; then
+        RESOURCE=$(printf "%s,%s,%s,%s" "A" "$TTL" "$QUALIFIED_DOMAIN_NAME" "$INSTANCE_IPV4")
+        if echo $RESOURCE_SETS | grep -q $RESOURCE &>/dev/null; then
             # Found? Then print using the JSON that can used to
-            # make a change request against Reoute53, if needed.
+            # make a change request against Route53, if needed.
             cat <<EOF
 {
   "ResourceRecordSet": {
-    "Name": "${INSTANCE_NAME_TAG}.",
+    "Name": "${QUALIFIED_DOMAIN_NAME}",
     "Type": "A",
     "TTL": ${TTL},
     "ResourceRecords": [
@@ -162,7 +179,7 @@ EOF
     {
       "Action": "${ACTION}",
       "ResourceRecordSet": {
-        "Name": "${INSTANCE_NAME_TAG}.",
+        "Name": "${QUALIFIED_DOMAIN_NAME}",
         "Type": "A",
         "TTL": ${TTL},
         "ResourceRecords": [
@@ -185,7 +202,7 @@ EOF
         aws route53 change-resource-record-sets \
             --hosted-zone-id $HOSTED_ZONE_ID \
             --change-batch file://${TEMPORARY_FILE} \
-            --region $REGION
+            --region $ThisRegion
 
     fi
 
@@ -194,6 +211,6 @@ EOF
     # Reset traps to their default behaviour.
     trap - HUP INT KILL TERM QUIT EXIT
 else
-    echo "Unable to create lock file (current owner: "$(cat $LOCK_FILE 2>/dev/null)")."
+    echo "Unable to create lock file (current owner: "$(cat $LOCK_FILE 2>/dev/null)")." >> $LOG
     exit 1
 fi

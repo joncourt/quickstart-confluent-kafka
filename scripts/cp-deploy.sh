@@ -69,8 +69,46 @@ LOG=/tmp/cp-deploy.log
 murl_top=http://169.254.169.254/latest/meta-data
 
 THIS_FQDN=$(curl -f -s $murl_top/hostname)
-[ -z "${THIS_FQDN}" ] && THIS_FQDN=$(hostname --fqdn)
-THIS_HOST=${THIS_FQDN%%.*}
+
+# Attempt to use the hostname but fallback to IP if the dns is not available
+if $(nslookup ${THIS_FQDN} >> /dev/null); then
+    [ -z "${THIS_FQDN}" ] && THIS_FQDN=$(hostname --fqdn)
+    echo "DNS is accessible, using DN ${THIS_FQDN}" >> $LOG
+    THIS_HOST=${THIS_FQDN%%.*}
+else
+    echo "DNS is not accessible, falling back to Route53 " >> $LOG
+   
+    ThisRegion=$(curl -f ${murl_top}/placement/availability-zone 2> /dev/null)
+    if [ -z "$ThisRegion" ] ; then
+        ThisRegion="us-east-1"
+    else
+        ThisRegion="${ThisRegion%[a-z]}"
+    fi
+    
+    ThisInstanceId=$(curl -f -s ${murl_top}/instance-id 2> /dev/null)
+
+    # Fetch current "Name" tag that was set for this
+    # instance, as it will be used when adding (or
+    # updating) a new DNS entry (of a type "A") in
+    # Route53 service. The premise is that whatever
+    # the aforementioned tag is, then the DNS entry
+    # should be exactly the same.
+    ThisInstanceNameTag=$(
+        aws ec2 describe-tags \
+            --query 'Tags[*].Value' \
+            --filters "Name=resource-id,Values=${ThisInstanceId}" 'Name=key,Values=Name' \
+            --region $ThisRegion --output text 2>/dev/null
+    )
+
+    # Make sure that the "Name" tag was actually set.
+    if [[ "x${ThisInstanceNameTag}" == "x" ]]; then
+        echo "The 'Name' tag is empty or has not been set, aborting..." >> $LOG
+        exit 1
+    fi
+
+    THIS_HOST=${ThisInstanceNameTag}
+fi
+
 
 
 # Validated for versions 3.1 and beyond

@@ -16,16 +16,14 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 SCRIPT_NAME="/etc/init.d/$(basename -- $0)"
-ROUTE53_BINARY="/usr/local/sbin/route53"
+
+ROUTE53_BINARY="/tmp/sbin/route53/route53.sh"
 
 case "$1" in
     start)
-        log_daemon_msg 'Adding a DNS entry into Route53 ...'
         $ROUTE53_BINARY --add >/dev/null 2>&1
-        log_end_msg $?
     ;;
     stop)
-        log_daemon_msg 'Removing a DNS entry from Route53 ...'
         $ROUTE53_BINARY --check >/dev/null 2>&1
         case $? in
             0)
@@ -36,7 +34,6 @@ case "$1" in
         esac
     ;;
     status)
-        log_daemon_msg 'Checking if a DNS entry exists in Route53 ...'
         $ROUTE53_BINARY --check >/dev/null 2>&1
         log_end_msg $?
     ;;
