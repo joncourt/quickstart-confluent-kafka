@@ -79,6 +79,14 @@
                         "QSS3BucketName",
                         "QSS3KeyPrefix"
                     ]
+                },
+                {
+                    "Label": {
+                        "default": "Route53 Configuration"
+                    },
+                    "Parameters": [
+                        "HostedZoneId"
+                    ]
                 }
             ],
             "ParameterLabels": {
@@ -405,6 +413,12 @@
             "MaxValue": "1000",
             "MinValue": "0",
             "Type": "Number"
+        },
+        "HostedZoneId": {
+            "ConstraintDescription": "Must exist prior to running this stack.",
+            "Default": "",
+            "Description": "The id of the Route53 hosted zone for creating DNS entries.",
+            "Type": "String"
         }
     },
     "Rules": {
@@ -506,6 +520,12 @@
                                     "Action": [
                                         "ec2:CreateTags",
                                         "ec2:DescribeInstances",
+                                        "ec2:DescribeTags",
+                                        "route53domains:ListDomains",
+                                        "route53:GetHostedZone",
+                                        "route53:ListHostedZones",
+                                        "route53:ListResourceRecordSets",
+                                        "route53:ChangeResourceRecordSets",
                                         "cloudformation:DescribeStackResources",
                                         "s3:Get*",
                                         "s3:List*"
@@ -607,6 +627,9 @@
                                 "Ref": "SubnetID"
                             }
                         ]
+                    },
+                    "HostedZoneId": {
+                        "Ref": "HostedZoneId"
                     }
                 }
             }
@@ -681,6 +704,9 @@
                                 "Ref": "SubnetID"
                             }
                         ]
+                    },
+                    "HostedZoneId": {
+                        "Ref": "HostedZoneId"
                     }
                 }
             }
@@ -758,6 +784,9 @@
                                 "Ref": "SubnetID"
                             }
                         ]
+                    },
+                    "HostedZoneId": {
+                        "Ref": "HostedZoneId"
                     }
                 }
             }

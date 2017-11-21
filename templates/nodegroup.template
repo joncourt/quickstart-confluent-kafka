@@ -173,6 +173,12 @@
         "SubnetID": {
             "Description": "Comma separated list of VPC subnet IDs for the cluster deployment (e.g. subnet-4b8d329f,subnet-bd73afc8); VPC must exist with proper configuration for Confluent cluster access (internal and external)and the subnets must be in the same VPC as the security groups",
             "Type": "List<AWS::EC2::Subnet::Id>"
+        },
+        "HostedZoneId": {
+            "ConstraintDescription": "Must exist prior to running this stack.",
+            "Default": "",
+            "Description": "The id of the Route53 hosted zone for creating DNS entries.",
+            "Type": "String"
         }
     },
     "Mappings": {
@@ -455,6 +461,24 @@
                             "/tmp/sbin/wait-for-resource.sh": {
                                 "source": {
                                     "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/wait-for-resource.sh"
+                                },
+                                "mode": "000755",
+                                "owner": "root",
+                                "group": "root",
+                                "authentication": "S3AccessCreds"
+                            },
+                            "/etc/init.d/route53": {
+                                "source": {
+                                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/route53/route53.init"
+                                },
+                                "mode": "000755",
+                                "owner": "root",
+                                "group": "root",
+                                "authentication": "S3AccessCreds"
+                            },
+                            "/tmp/sbin/route53/route53.sh": {
+                                "source": {
+                                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/route53/route53.sh"
                                 },
                                 "mode": "000755",
                                 "owner": "root",
@@ -758,6 +782,14 @@
                                 },
                                 " > /tmp/cversion\n",
                                 "\n",
+                                "## Setup Route53 Configuration defaults - passes TTL and HOSTED_ZONE_ID\n",
+                                "echo 'TTL=300' > /etc/default/route53\n",
+                                "echo 'HOSTED_ZONE_ID=", 
+                                {
+                                    "Ref": "HostedZoneId"
+                                },
+                                "' >> /etc/default/route53\n",
+                                "\n",
                                 "## Retrieve scripts to deploy Confluent on the instances \n",
                                 "##  cfn-init downloads everything \n",
                                 "##  and then we're off to the races \n",
@@ -795,19 +827,62 @@
                                 },
                                 " WorkerStack Nodes\n",
                                 "\n",
-                                "## Now find the private IP addresses of all deployed nodes\n",
-                                "##   (generating /tmp/cphosts and /tmp/<role> files)\n",
-                                "$AMI_SBIN/gen-cluster-hosts.sh ",
+                                
+                                "## Define the base meta data url\n",
+                                "murl_top=http://169.254.169.254/latest/meta-data\n",
+
+                                "## Setup Route53 Recordset for this node \n",
+                                "echo 'TTL=300' > /etc/default/route53 \n",
+                                "echo 'HOSTED_ZONE_ID=",
                                 {
-                                    "Ref": "ParentStackName"
+                                    "Ref": "HostedZoneId"
                                 },
-                                "\n",
-                                "\n",
+                                "' >> /etc/default/route53\n",
+                                
                                 "## Tag the instance (now that we're sure of launch index)\n",
                                 "##   NOTE: ami_launch_index is correct only within a single subnet)\n",
-                                "instance_id=$(curl -f http://169.254.169.254/latest/meta-data/instance-id)\n",
-                                "ami_launch_index=$(curl -f http://169.254.169.254/latest/meta-data/ami-launch-index)\n",
-                                "launch_node=$(grep -w `hostname -s` /tmp/",
+                                "instance_id=$(curl -f $murl_top/instance-id)\n",
+                                "ami_launch_index=$(curl -f $murl_top/ami-launch-index)\n",
+                                "THIS_FQDN=$(curl -f -s $murl_top/hostname)\n",
+                                "# Test if we're able to reach the DNS servers, in private direct-connect vpcs you may not be able to as per issue #45\n",
+                                "if $(nslookup ${THIS_FQDN} >> /dev/null); then\n",
+                                "    [ -z \"${THIS_FQDN}\" ] && THIS_FQDN=$(hostname --fqdn)\n",
+                                "    THIS_HOST=${THIS_FQDN%%.*}\n",
+                                "else\n",
+                                "    echo \"DNS is not accessible, falling back to Route53 \" \n",
+                                "\n",
+                                "    ThisRegion=$(curl -f ${murl_top}/placement/availability-zone 2> /dev/null)\n",
+                                "    if [ -z \"$ThisRegion\" ] ; then\n",
+                                "        ThisRegion=\"us-east-1\"\n",
+                                "    else\n",
+                                "        ThisRegion=\"${ThisRegion%[a-z]}\"\n",
+                                "    fi\n",
+                                "\n",
+                                "    ThisInstanceId=$(curl -f -s ${murl_top}/instance-id 2> /dev/null)\n",
+                                "\n",
+                                "    # Fetch current \"Name\" tag that was set for this\n",
+                                "    # instance, as it will be used when adding (or\n",
+                                "    # updating) a new DNS entry (of a type \"A\") in\n",
+                                "    # Route53 service. The premise is that whatever\n",
+                                "    # the aforementioned tag is, then the DNS entry\n",
+                                "    # should be exactly the same.\n",
+                                "    ThisInstanceNameTag=$(\n",
+                                "        aws ec2 describe-tags \\ \n",
+                                "            --query 'Tags[*].Value' \\ \n",
+                                "            --filters \"Name=resource-id,Values=${ThisInstanceId}\" 'Name=key,Values=Name' \\ \n",
+                                "            --region $ThisRegion --output text 2>/dev/null\n",
+                                "    )\n",
+                                "\n",
+                                "    # Make sure that the \"Name\" tag was actually set.\n",
+                                "    if [[ \"x${ThisInstanceNameTag}\" == 'x' ]]; then\n",
+                                "        echo \"The 'Name' tag is empty or has not been set, aborting...\" \n",
+                                "        exit 1\n",
+                                "    fi\n",
+                                "\n",
+                                "    THIS_HOST=${ThisInstanceNameTag}\n",
+                                "fi\n",
+                                "\n",
+                                "launch_node=$(grep -w $THIS_HOST /tmp/",
                                 {
                                     "Ref": "NodeDesignation"
                                 },
@@ -834,6 +909,14 @@
                                 },
                                 " --resources $instance_id --tags Key=Name,Value=$instance_tag\n",
                                 "fi\n",
+                                "\n",
+                                "## Now find the qualified dn addresses of all deployed nodes\n",
+                                "##   (generating /tmp/cphosts and /tmp/<role> files)\n",
+                                "$AMI_SBIN/gen-cluster-hosts.sh ",
+                                {
+                                    "Ref": "ParentStackName"
+                                },
+                                "\n",
                                 "## Run the steps to install the software, \n",
                                 "## then configure and start the services \n",
                                 "$AMI_SBIN/cp-install.sh 2> /tmp/cp-install.err \n",
@@ -853,6 +936,9 @@
                                 "## [ OPTIONAL ] Open up ssh to allow direct login\n",
                                 "#sed -i 's/ChallengeResponseAuthentication .*no$/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config\n",
                                 "#service sshd restart\n",
+                                "\n",
+                                "## Create the DNS entries\n",
+                                "$AMI_SBIN/route53/route53.sh --add \n",
                                 "\n",
                                 "## If all went well, signal success (must be done by ALL nodes in group)\n",
                                 "cfn-signal -e 0 -r 'Confluent Platform node deployment complete' '",
