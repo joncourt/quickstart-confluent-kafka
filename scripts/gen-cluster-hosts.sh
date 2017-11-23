@@ -39,9 +39,16 @@
 # those autoscaling groups are found, the node list will default to
 # the list from /tmp/brokers.
 
-murl_top=http://169.254.169.254/latest/meta-data
 
-THIS_FQDN=$(curl -f -s $murl_top/hostname)
+THIS_SCRIPT=`readlink -f $0`
+SCRIPTDIR=`dirname ${THIS_SCRIPT}`
+
+source $SCRIPTDIR/cp-common.sh
+
+# set murl_top
+set_aws_meta_url
+set_hosted_zone_dn
+set_this_host
 
 CP_HOSTS_FILE=${CP_HOSTS_FILE:-/tmp/cphosts}
 
@@ -86,29 +93,13 @@ fi
 #	(even with IAM users), but we could do the extra filtering
 #	on KeyName if necessary. 
 #
-# Additionally attempt to use the hostname but fallback to IP if the dns is not available
-
-# Attempt to use the hostname but fallback to IP if the dns is not available
-if $(nslookup ${THIS_FQDN} >> /dev/null); then
-    echo "DNS is accessible, using PrivateDnsName field from meta in cphosts file" >> $LOG
-    aws ec2 describe-instances --output text --region $ThisRegion \
-      --filters 'Name=instance-state-name,Values=running,stopped' \
-      --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,KeyName,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
-      | grep -w "$ThisStack" | sort -k 3,4 \
-      | awk '{split ($1,fqdn,"."); print fqdn[1]" "$2" "$3" "$4" "$5" "$6}' \
-      > ${CP_HOSTS_FILE}
-else
-
-    HOSTED_ZONE_DN=$(aws route53 get-hosted-zone --id  ${HOSTED_ZONE_ID} --query 'HostedZone.Name' --output text 2>> $LOG )
-
-    aws ec2 describe-instances --output text --region $ThisRegion \
-      --query 'Reservations[].Instances[].[Tags[?Key == `Name`] | [0].Value,InstanceId,LaunchTime,AmiLaunchIndex,KeyName,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
-      --filters 'Name=instance-state-name,Values=running,stopped' \
-      | grep -w "$ThisStack" | sort -k 3,4 \
-      | awk -v zone=$HOSTED_ZONE_DN '{print $1"."zone" "$2" "$3" "$4" "$5" "$6}' \
-      > ${CP_HOSTS_FILE}
-fi
-
+aws ec2 describe-instances --output text --region $ThisRegion \
+  --filters 'Name=instance-state-name,Values=running,stopped' \
+  --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,KeyName,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
+  | grep -w "$ThisStack" | sort -k 3,4 \
+  | awk -v zone=$HOSTED_ZONE_DN '{split ($1,fqdn,"."); print fqdn[1]"."zone" "$2" "$3" "$4" "$5" "$6}' \
+  > ${CP_HOSTS_FILE}
+     
 
 #	cat ${CP_HOSTS_FILE}
 

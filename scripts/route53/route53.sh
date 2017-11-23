@@ -16,7 +16,7 @@
 #
 # This script is to be installed as /usr/local/sbin/route53.
 #
-LOG=/tmp/cp-route53.log
+LOG=/tmp/cp-install.log
 
 export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
@@ -91,8 +91,6 @@ fi
 if (set -o noclobber; echo $$ > $LOCK_FILE) &>/dev/null; then
     # Make a secure temporary file name, needed later.
     TEMPORARY_FILE=$(mktemp -ut "$(basename $0).XXXXXXXX")
-    echo "TempFile = $TEMPORARY_FILE"
-
 
     # Make sure to remove the temporary
     # file when terminating, and clean-up
@@ -100,35 +98,15 @@ if (set -o noclobber; echo $$ > $LOCK_FILE) &>/dev/null; then
     trap \
         "rm -f $LOCK_FILE $TEMPORARY_FILE; exit" \
             HUP INT KILL TERM QUIT EXIT
-
-    echo "Done Trap"
-
+            
     # Fetch current private IP address of this instance.
     INSTANCE_IPV4=$(curl -s ${murl_top}/local-ipv4 2>/dev/null)
     INSTANCE_ID=$(curl -f -s ${murl_top}/instance-id 2> /dev/null)
-
-    # Fetch current "Name" tag that was set for this
-    # instance, as it will be used when adding (or
-    # updating) a new DNS entry (of a type "A") in
-    # Route53 service. The premise is that whatever
-    # the aforementioned tag is, then the DNS entry
-    # should be exactly the same.
-    INSTANCE_NAME_TAG=$(
-        aws ec2 describe-tags \
-            --query 'Tags[*].Value' \
-            --filters "Name=resource-id,Values=${INSTANCE_ID}" 'Name=key,Values=Name' \
-            --region $ThisRegion --output text 2>/dev/null
-    )
-
-    # Make sure that the "Name" tag was actually set.
-    if [[ "x${INSTANCE_NAME_TAG}" == "x" ]]; then
-        echo "The 'Name' tag is empty or has not been set, aborting..." >> $LOG
-        exit 1
-    fi
+    THIS_HOST=$(hostname -s)
 
     HOSTED_ZONE_DN=$(aws route53 get-hosted-zone --id  ${HOSTED_ZONE_ID} --query 'HostedZone.Name' --output text 2>/dev/null)
 
-    QUALIFIED_DOMAIN_NAME="${INSTANCE_NAME_TAG}.${HOSTED_ZONE_DN}"
+    QUALIFIED_DOMAIN_NAME="${THIS_HOST}.${HOSTED_ZONE_DN}"
 
     if [[ $ACTION == 'CHECK' ]]; then
         # Fetch details (about every resource) about given Hosted
