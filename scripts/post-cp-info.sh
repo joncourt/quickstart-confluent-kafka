@@ -51,79 +51,19 @@ fi
 #	REMEMBER: ami-launch-index will ALWAYS be 0 for spot instances
 #
 
-murl_top=http://169.254.169.254/latest/meta-data
-THIS_FQDN=$(curl -f -s $murl_top/hostname)
+THIS_SCRIPT=`readlink -f $0`
+SCRIPTDIR=`dirname ${THIS_SCRIPT}`
 
-# Attempt to use the hostname but fallback to IP if the dns is not available
-if $(nslookup ${THIS_FQDN} >> /dev/null); then
-    [ -z "${THIS_FQDN}" ] && THIS_FQDN=$(hostname --fqdn)
-    echo "DNS is accessible, using DN ${THIS_FQDN}" >> $LOG
-    THIS_HOST=${THIS_FQDN%%.*}
-else
-    echo "DNS is not accessible, falling back to Route53 " >> $LOG
-    readonly ROUTE53_DEFAULT='/etc/default/route53'
-    
-    # Load environment variables that are mandatory.
-    if [[ -f $ROUTE53_DEFAULT ]]; then
-        # Necessary details (e.g. Hosted Zone ID, etc.) should
-        # have been passed down in the bootstrap process.
-        source $ROUTE53_DEFAULT
-    else
-        echo "Unable to load environment variables from '$ROUTE53_DEFAULT', aborting..." >>$LOG
-        exit 1
-    fi
-    
-    # Check if environment variables are present and non-empty.
-    RequiredEnvVars=(HOSTED_ZONE_ID)
-    for v in ${RequiredEnvVars[@]}; do
-        eval VALUE='$'${v}
-        if [[ -z $VALUE ]]; then
-            echo "The '$v' environment variable has to be set, aborting..." >> $LOG
-            exit 1
-        fi
-    done
-    
-    ThisRegion=$(curl -f ${murl_top}/placement/availability-zone 2> /dev/null)
-    if [ -z "$ThisRegion" ] ; then
-        ThisRegion="us-east-1"
-    else
-        ThisRegion="${ThisRegion%[a-z]}"
-    fi
-    
-    ThisInstanceId=$(curl -f -s ${murl_top}/instance-id 2> /dev/null)
+source $SCRIPTDIR/cp-common.sh
 
-    # Fetch current "Name" tag that was set for this
-    # instance, as it will be used when adding (or
-    # updating) a new DNS entry (of a type "A") in
-    # Route53 service. The premise is that whatever
-    # the aforementioned tag is, then the DNS entry
-    # should be exactly the same.
-    ThisInstanceNameTag=$(
-        aws ec2 describe-tags \
-            --query 'Tags[*].Value' \
-            --filters "Name=resource-id,Values=${ThisInstanceId}" 'Name=key,Values=Name' \
-            --region $ThisRegion --output text 2>/dev/null
-    )
-
-    # Make sure that the "Name" tag was actually set.
-    if [[ "x${ThisInstanceNameTag}" == "x" ]]; then
-        echo "The 'Name' tag is empty or has not been set, aborting..." >> $LOG
-        exit 1
-    fi
-
-    HostedZoneDn=$(aws route53 get-hosted-zone --id  ${HOSTED_ZONE_ID} --query 'HostedZone.Name' --output text 2>/dev/null)
-
-    ThisQualifiedDn="${ThisInstanceNameTag}.${HostedZoneDn}"
-
-    THIS_HOST=${ThisQualifiedDn}
-fi
-
+# set murl_top
+set_aws_meta_url
+set_hosted_zone_dn
+set_this_host
 
 broker_index=$(curl -f -s $murl_top/ami-launch-index)
 if [ -r /tmp/brokers ] ; then
-
-    # added the -w arg as to prevent partial matches - had an issue with ip-10-205-78-15 and ip-10-205-78-152
-	hindex=$(grep -nw $THIS_HOST /tmp/brokers | cut -d: -f1)
+	hindex=$(grep -n `hostname -s` /tmp/brokers | cut -d: -f1)
 
 	if [ -z "$hindex" ] ; then
 		echo "post-cp-info: $THIS_HOST is not a broker; nothing to do" | tee -a $LOG

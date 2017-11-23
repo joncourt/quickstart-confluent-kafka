@@ -25,7 +25,7 @@
 # Simple script to wait for a Cloudformation resource
 #
 # usage:
-#    $0 [ stack-name ] ResourceName
+#	$0 [ stack-name ] ResourceName
 #
 # If no stack is given, we try to figure out out from tags of this
 # instance.
