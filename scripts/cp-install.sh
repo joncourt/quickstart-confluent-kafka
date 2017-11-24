@@ -45,9 +45,6 @@ set -x
 THIS_SCRIPT=`readlink -f $0`
 SCRIPTDIR=`dirname ${THIS_SCRIPT}`
 
-source $SCRIPTDIR/cp-common.sh
-
-
 LOG=/tmp/cp-install.log
 
 # Extract useful details from the AWS MetaData
@@ -99,11 +96,9 @@ fi
 
 
 install_confluent_from_tarball() {
-    echo "Installing Confluent from tarball" >> $LOG
-
     [ -d $CP_HOME ] && return 0
 
-    echo "Installing Confluent Platform"
+    echo "Installing Confluent Platform" >> $LOG
 
     curl -f -L -o /tmp/$CP_TARBALL $CP_TARBALL_URI
 
@@ -124,10 +119,10 @@ install_confluent_from_tarball() {
 REPO_FILE="/etc/yum.repos.d/confluent.repo"
 
 add_confluent_repo_centos() {
-    [ -f $REPO_FILE ] && return
+	[ -f $REPO_FILE ] && return
     
-    echo "Adding Confluent Repo for Centos" >> $LOG
-
+    echo "Adding confluent repo for Centos" >> $LOG
+    
 	CVER=`lsb_release -r | awk '{print $2}'`
 	CVER=${CVER%%.*}
 	[ "${CVER:-0}" -lt 6 ] && return		# CentOS 6 and above only
@@ -152,7 +147,7 @@ EOF_repo
 
 update_confluent_repo_rpm() {
 	if [ -f $REPO_FILE ] ; then
-        echo "Updating Confluent RPM Repo" >> $LOG
+	    echo "Updating Confluent repo (RPM)" >> $LOG
 		sed -i "s/rpm\/.../rpm\/${CP_MINOR_VERSION}/" $REPO_FILE
 	else
 		add_confluent_repo_centos
@@ -162,6 +157,7 @@ update_confluent_repo_rpm() {
 }
 
 update_confluent_repo_deb() {
+    echo "Updating Confluent repo (Debian)" >> $LOG
 	wget -qO - http://packages.confluent.io/deb/${CP_MINOR_VERSION}/archive.key | apt-key add -
 
 	sed -i "/packages.confluent.io/d" /etc/apt/sources.list
@@ -244,6 +240,7 @@ minimal_confluent_packages() {
 
 install_confluent_from_repo() {
     echo "Installing Confluent from repo" >> $LOG
+    
 	CONFLUENT_PKGS=$(platform_confluent_packages)
 
 	which gcc &> /dev/null
@@ -261,16 +258,14 @@ install_confluent_from_repo() {
 	[ $gcc_available ] && pip install --upgrade confluent-kafka
 }
 
-main() {
+main()
+{
 	echo "$0 script started at "`date` >> $LOG
 
 	if [ `id -u` -ne 0 ] ; then
 		echo "  ERROR: script must be run as root" >> $LOG
 		exit 1
 	fi
-        
-    maybe_append_domain_to_dhclient_conf
-    set_this_host
 
 	update_confluent_repo_spec
 #	install_confluent_from_repo
