@@ -39,16 +39,7 @@
 # those autoscaling groups are found, the node list will default to
 # the list from /tmp/brokers.
 
-
-THIS_SCRIPT=`readlink -f $0`
-SCRIPTDIR=`dirname ${THIS_SCRIPT}`
-
-source $SCRIPTDIR/cp-common.sh
-
-# set murl_top
-set_aws_meta_url
-set_hosted_zone_dn
-set_this_host
+murl_top=http://169.254.169.254/latest/meta-data
 
 CP_HOSTS_FILE=${CP_HOSTS_FILE:-/tmp/cphosts}
 
@@ -97,9 +88,9 @@ aws ec2 describe-instances --output text --region $ThisRegion \
   --filters 'Name=instance-state-name,Values=running,stopped' \
   --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,KeyName,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
   | grep -w "$ThisStack" | sort -k 3,4 \
-  | awk -v zone=$HOSTED_ZONE_DN '{split ($1,fqdn,"."); print fqdn[1]"."zone" "$2" "$3" "$4" "$5" "$6}' \
+  | awk '{split ($1,fqdn,"."); print fqdn[1]" "$2" "$3" "$4" "$5" "$6}' \
   > ${CP_HOSTS_FILE}
-     
+
 
 #	cat ${CP_HOSTS_FILE}
 

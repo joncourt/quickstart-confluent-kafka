@@ -47,7 +47,17 @@ SCRIPTDIR=`dirname ${THIS_SCRIPT}`
 
 source $SCRIPTDIR/cp-common.sh
 
+
 LOG=/tmp/cp-install.log
+
+# Extract useful details from the AWS MetaData
+# The information there should be treated as the source of truth,
+# even if the internal settings are temporarily incorrect.
+murl_top=http://169.254.169.254/latest/meta-data
+
+THIS_FQDN=$(curl -f -s $murl_top/hostname)
+[ -z "${THIS_FQDN}" ] && THIS_FQDN=`hostname --fqdn`
+THIS_HOST=${THIS_FQDN%%.*}
 
 
 # Validated for versions 3.1 and beyond
@@ -258,7 +268,8 @@ main() {
 		echo "  ERROR: script must be run as root" >> $LOG
 		exit 1
 	fi
-    
+        
+    maybe_append_domain_to_dhclient_conf
     set_this_host
 
 	update_confluent_repo_spec
