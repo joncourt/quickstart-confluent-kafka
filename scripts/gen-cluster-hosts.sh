@@ -38,6 +38,7 @@
 # Zookeeper nodes and Worker nodes are optional.  If no instances for
 # those autoscaling groups are found, the node list will default to
 # the list from /tmp/brokers.
+LOG=/tmp/cp-deploy.log
 
 murl_top=http://169.254.169.254/latest/meta-data
 
@@ -84,6 +85,7 @@ fi
 #	(even with IAM users), but we could do the extra filtering
 #	on KeyName if necessary. 
 #
+echo "Forming cphosts file at $CP_HOSTS_FILE" >> $LOG
 aws ec2 describe-instances --output text --region $ThisRegion \
   --filters 'Name=instance-state-name,Values=running,stopped' \
   --query 'Reservations[].Instances[].[PrivateDnsName,InstanceId,LaunchTime,AmiLaunchIndex,KeyName,Tags[?Key == `aws:autoscaling:groupName`] | [0].Value ] ' \
@@ -111,6 +113,7 @@ fi
 # The different models will have slightly different labels for the 
 # nodes associated with each group ... but it's simple to handle both cases.
 #
+echo "Extracting broker nodes file from cphosts file" >> $LOG
 grep -q -e "-BrokerNodes-" -e "-BrokerStack-" ${CP_HOSTS_FILE}
 if [ $? -eq 0 ] ; then
 	grep -e "-BrokerNodes-" -e "-BrokerStack-" ${CP_HOSTS_FILE} \
@@ -119,6 +122,7 @@ else
 	cp ${CP_HOSTS_FILE} /tmp/brokers
 fi
 
+echo "Extracting zookeeper nodes file from cphosts file" >> $LOG
 grep -q -e "-ZookeeperNodes-" -e "-ZookeeperStack-" ${CP_HOSTS_FILE}
 if [ $? -eq 0 ] ; then
 	grep -e "-ZookeeperNodes-" -e "-ZookeeperStack-" ${CP_HOSTS_FILE} \
@@ -127,6 +131,7 @@ else
 	head -3 /tmp/brokers > /tmp/zookeepers
 fi
 
+echo "Extracting worker nodes file from cphosts file" >> $LOG
 grep -q -e "-WorkerNodes-" -e "-WorkerStack-" ${CP_HOSTS_FILE}
 if [ $? -eq 0 ] ; then
 	grep -e "-WorkerNodes-" -e "-WorkerStack-" ${CP_HOSTS_FILE} \

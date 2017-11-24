@@ -102,6 +102,7 @@ fi
 # Input: KADMIN_PASSWD {optional override}
 #
 update_kadmin_user() {
+    echo "Updating kadmin user" >> $LOG
 	if [ -z "$KADMIN_PASSWD" ] ; then
 		grep -q -i "Enabled" /tmp/csecurity 2> /dev/null
 		if [ $? -eq 0 ] ; then
@@ -128,6 +129,7 @@ passwdEOF
 # publishing a new AMI.   The logic here should be BULLETPROOF.
 #
 patch_confluent_installation() {
+    echo "Patching Confluent installation" >> $LOG
 	if [ -d $CP_HOME/share/java ] ; then
 		CP_JAVA_DIR=${CP_HOME}/share/java
 	else
@@ -145,6 +147,8 @@ patch_confluent_installation() {
 # Locate the configuration files (since we use them all the time)
 # Should be called ONLY after the software has been installed.
 locate_cfg() {
+    echo "Finding configuration locations" >> $LOG
+    
 	ZK_CFG=${CP_ETC_DIR}/kafka/zookeeper.properties
 	BROKER_CFG=${CP_ETC_DIR}/kafka/server.properties
 	REST_PROXY_CFG=${CP_ETC_DIR}/kafka-rest/kafka-rest.properties
@@ -158,6 +162,8 @@ locate_cfg() {
 # Locate the start scripts for any changes.
 # Should be called ONLY after the software has been installed.
 locate_start_scripts() {
+    echo "Finding start script locations" >> $LOG
+    
 	BIN_DIR=${CP_HOME}/bin
 	[ ! -d $CP_HOME ] && BIN_DIR="/usr/bin"
 
@@ -171,6 +177,7 @@ locate_start_scripts() {
 
 # Archive the configuration file sto a known location
 archive_cfg() {
+    echo "Archiving old config" >> $LOG
 	NOW=$(date +"%F-%H:%M")
 
 	if [ -d $CP_HOME ] ; then  backup_dir=$CP_HOME/etc/archive_${NOW}
@@ -244,6 +251,8 @@ set_property() {
 configure_confluent_zk() {
 	[ ! -f $ZK_CFG ] && return 1
 	
+    echo "Configuring Confluent Zookeeper" >> $LOG
+	
 	grep -q ^initLimit $ZK_CFG
 	[ $? -ne 0 ] && echo "initLimit=5" >> $ZK_CFG
 
@@ -280,6 +289,8 @@ configure_confluent_zk() {
 
 configure_kafka_broker() {
 	[ ! -f $BROKER_CFG ] && return 1
+
+    echo "Configuring Kafka Broker" >> $LOG
 
 	local numBrokers=`echo ${brokers//,/ } | wc -w`
 
@@ -353,6 +364,8 @@ configure_kafka_broker() {
 configure_schema_registry() {
 	[ ! -f $SCHEMA_REG_CFG ] && return 1
 
+    echo "Configuring Schema Registry" >> $LOG
+
 	set_property $SCHEMA_REG_CFG "kafkastore.connection.url" "$zconnect"
 	set_property $SCHEMA_REG_CFG "kafkastore.zk.session.timeout.ms" "300000"
 	set_property $SCHEMA_REG_CFG "kafkastore.init.timeout.ms" "300000"
@@ -360,6 +373,8 @@ configure_schema_registry() {
 
 configure_rest_proxy() {
 	[ ! -f $REST_PROXY_CFG ] && return 1
+
+    echo "Configuring Rest Proxy" >> $LOG
 
 	myid=-1
 	widx=0
@@ -387,6 +402,8 @@ configure_rest_proxy() {
 # invocation of the Control Center application.
 configure_control_center_security() {
 	[ ! -f $CONTROL_CENTER_CFG ] && return 1
+
+    echo "Configuring Control Center security" >> $LOG
 
 	CC_REALM=c3
 	CC_ADMIN_ROLE=Administrators
@@ -417,6 +434,8 @@ export CONTROL_CENTER_OPTS=\"-Djava.security.auth.login.config='$CC_JAAS_CONF'\"
 
 configure_control_center() {
 	[ ! -f $CONTROL_CENTER_CFG ] && return 1
+    
+    echo "Configuring Control Center" >> $LOG
 
 	local ncpu=$(grep ^processor /proc/cpuinfo | wc -l)
 	ncpu=${ncpu:-2}
@@ -489,6 +508,8 @@ configure_control_center() {
 }
 
 configure_workers() {
+    echo "Configuring workers" >> $LOG
+
 	if [ -f $LEGACY_CONSUMER_CFG ] ; then
 		set_property $LEGACY_CONSUMER_CFG "group.id" "${CLUSTERNAME}-consumer-group"
 		set_property $LEGACY_CONSUMER_CFG "zookeeper.connect" "$zconnect"
@@ -560,6 +581,8 @@ configure_workers() {
 # TBD : We could be smarter about bconnect, putting only a few hosts in the list
 # rather than all of them.
 configure_confluent_node() {
+    echo "Configuring Confluent node" >> $LOG
+    
 		# Assemble Zookeeper Connect and Broker List strings  once, 
 		# since we may use themm in multiple places
 	if [ -f $ZK_CFG ] ; then 
@@ -647,6 +670,8 @@ update_service_heap_opts() {
 		return
 	fi
 
+    echo "Updating service heap options" >> $LOG
+
 	ZK_SCRIPT=${BIN_DIR}/zookeeper-server-start
 	BROKER_SCRIPT=${BIN_DIR}/kafka-server-start
 		# Source the script that sets *_HEAP_OPTS
@@ -706,6 +731,8 @@ wait_for_zk_quorum() {
     ZOOKEEPER_WAIT=${1:-300}
     STIME=5
 
+    echo "Waiting for upto $STIME x $ZOOKEEPER_WAIT seconds for Zookeeper quorum to form" >> $LOG
+
 	if [ -x $SCRIPTDIR/cub  -a  -f $SCRIPTDIR/docker-utils.jar ] ; then
 		DOCKER_UTILS_JAR=$SCRIPTDIR/docker-utils.jar $SCRIPTDIR/cub zk-ready $zconnect $ZOOKEEPER_WAIT
 
@@ -737,6 +764,8 @@ wait_for_zk_quorum() {
 #		is a broker or worker.  zookeeper-only nodes need not 
 #		waste time here
 wait_for_brokers() {
+    echo "Waiting for Brokers" >> $LOG
+
 	echo "$brokers" | grep -q -w "$THIS_HOST" 
 	if [ $? -ne 0 ] ; then
 		echo "$workers" | grep -q -w "$THIS_HOST" 
@@ -788,6 +817,8 @@ wait_for_brokers() {
 #	and then stop with "/etc/init.d/cp-*-service"
 #
 start_core_services() {
+    echo "Starting core services" >> $LOG
+
 	echo "$zknodes" | grep -q -w "$THIS_HOST" 
 	if [ $? -eq 0 ] ; then
 		if [ -x $CP_HOME/initscripts/cp-zk-service ] ; then
@@ -831,6 +862,8 @@ start_core_services() {
 # do some extra work and retry the startup command
 # multiple times if we don't see a successful start.
 start_worker_services() {
+    echo "Starting worker services" >> $LOG
+
 		# Schema registy on second worker (or first if there's only one)
 	numWorkers=$(echo "${workers//,/ }" | wc -w)
 	if [ $numWorkers -le 1 ] ; then
@@ -915,6 +948,8 @@ start_worker_services() {
 }
 
 start_control_center() {
+    echo "Starting Control Center" >> $LOG
+
 		# Control Center on first worker only
 		# Control Center is VERY FRAGILE on start-up,
 		#	so we'll isolate the start here in case we need to restart.
@@ -956,6 +991,8 @@ create_topic_safely() {
 	local partitions=$2
 	local replicas=$3
 	local cleanup_policy=$4
+	
+	echo "Creating topics" >> $LOG
 
 	[ -n "$cleanup_policy" ] && CP_ARG="--config cleanup.policy=$cleanup_policy" 
 
@@ -985,10 +1022,7 @@ wait_for_topic() {
 	local topic=${1:-}
     local TOPIC_WAIT=${2:-300}
 
-    
-    echo "Waiting for topic $topic for $TOPIC_WAIT millis" >> $LOG
-
-    [ -z "$topic" ] && return
+	[ -z "$topic" ] && return
 
     SWAIT=$TOPIC_WAIT
     STIME=5
@@ -1015,12 +1049,12 @@ wait_for_topic() {
 #
 create_worker_topics() {
     echo "Creating worker topics" >> $LOG
-        # Topic creation only executed on brokers/workers ... not ZK-ONLY nodes
-    echo "$brokers" | grep -q -w "$THIS_HOST"
-    if [ $? -ne 0 ] ; then
-        echo "$workers" | grep -q -w "$THIS_HOST"
-        [ $? -ne 0 ] && return 0
-    fi
+		# Topic creation only executed on brokers/workers ... not ZK-ONLY nodes
+	echo "$brokers" | grep -q -w "$THIS_HOST"
+	if [ $? -ne 0 ] ; then
+		echo "$workers" | grep -q -w "$THIS_HOST"
+		[ $? -ne 0 ] && return 0
+	fi
 
 		# If this instance won't create the topics ... just wait
 		# till the last one shows up.
@@ -1029,8 +1063,8 @@ create_worker_topics() {
 #		return
 #	fi
 
-    local numBrokers=`echo ${brokers//,/ } | wc -w`
-    local numWorkers=`echo ${workers//,/ } | wc -w`
+	local numBrokers=`echo ${brokers//,/ } | wc -w`
+	local numWorkers=`echo ${workers//,/ } | wc -w`
 
 		# Connect requires some simple topics.  Be sure
 		# these align with any overrides when customzing
