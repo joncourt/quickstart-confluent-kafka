@@ -378,9 +378,9 @@
                                 "group": "root",
                                 "authentication": "S3AccessCreds"
                             },
-                            "/tmp/sbin/cp-common.sh": {
+                            "/tmp/sbin/prepare-dns.sh": {
                                 "source": {
-                                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/cp-common.sh"
+                                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/prepare-dns.sh"
                                 },
                                 "mode": "000755",
                                 "owner": "root",
@@ -790,14 +790,6 @@
                                 },
                                 " > /tmp/cversion\n",
                                 "\n",
-                                "## Setup Route53 Configuration defaults - passes TTL and HOSTED_ZONE_ID\n",
-                                "echo 'TTL=300' > /etc/default/route53\n",
-                                "echo 'HOSTED_ZONE_ID=", 
-                                {
-                                    "Ref": "HostedZoneId"
-                                },
-                                "' >> /etc/default/route53\n",
-                                "\n",
                                 "## Retrieve scripts to deploy Confluent on the instances \n",
                                 "##  cfn-init downloads everything \n",
                                 "##  and then we're off to the races \n",
@@ -813,6 +805,13 @@
                                 },
                                 "\n",
                                 "AMI_SBIN=/tmp/sbin \n",
+                                "\n",
+                                "## Preparing DNS - note requires /etc/default/route53 file to have been filled\n",
+                                "$AMI_SBIN/prepare-dns.sh ",
+                                {
+                                    "Ref": "HostedZoneId"
+                                },
+                                " 300 \n",
                                 "\n",
                                 "## Prepare the instance \n",
                                 "$AMI_SBIN/prep-cp-instance.sh \n",
@@ -834,9 +833,6 @@
                                     "Ref": "ParentStackName"
                                 },
                                 " WorkerStack Nodes\n",
-                                "\n",
-                                "## Create the DNS entries\n",
-                                "$AMI_SBIN/route53/route53.sh --add \n",
                                 "\n",
                                 "## Now find the private IP addresses of all deployed nodes\n",
                                 "##   (generating /tmp/cphosts and /tmp/<role> files)\n",
