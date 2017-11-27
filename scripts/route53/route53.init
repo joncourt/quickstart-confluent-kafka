@@ -11,8 +11,6 @@
 # Short-Description: Add and/or remove a DNS entry in Route53
 ### END INIT INFO
 
-. /lib/lsb/init-functions
-
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 SCRIPT_NAME="/etc/init.d/$(basename -- $0)"
@@ -21,6 +19,10 @@ ROUTE53_BINARY="/tmp/sbin/route53/route53.sh"
 
 case "$1" in
     start)
+        # Lockfile is necessary for shutdown hook to work
+        # TODO: ensure the lockfile location is correct also for Centos and Ubuntu
+        LOCKFILE=/var/lock/subsys/route53
+        touch $LOCKFILE
         $ROUTE53_BINARY --add >/dev/null 2>&1
     ;;
     stop)
@@ -28,17 +30,16 @@ case "$1" in
         case $? in
             0)
                 $ROUTE53_BINARY --remove >/dev/null 2>&1
-                log_end_msg $?
+                echo "Removed DNS entry"
             ;;
-            1) log_end_msg 0 ;;
+            1) echo "Failed to remove DNS entry - code $?" ;;
         esac
     ;;
     status)
         $ROUTE53_BINARY --check >/dev/null 2>&1
-        log_end_msg $?
     ;;
     *)
-        log_action_msg "Usage: $SCRIPT_NAME {start|stop|status}" >&2
+        echo "Usage: $SCRIPT_NAME {start|stop|status}" >&2
         exit 3
     ;;
 esac

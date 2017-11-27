@@ -1,11 +1,34 @@
 #!/usr/bin/env bash
 
-LOG=/tmp/cp-install.log
+THIS_SCRIPT=`readlink -f $0`
+SCRIPTDIR=`dirname ${THIS_SCRIPT}`
+LOG=/tmp/cp-dns.log
+
+ROUTE53_DEFAULT=/etc/default/route53
+ROUTE53_SVC_LOCKFILE=/var/lock/subsys/route53
+
+
+HOSTED_ZONE_ID=$1
+if [ -z $HOSTED_ZONE_ID ]; then
+    echo "HOSTED_ZONE_ID is expected at position one for script $0, not found, not setting up dns" >> $LOG
+    exit 0
+else 
+    echo "Using Hosted Zone ID '$HOSTED_ZONE_ID'" >> $LOG
+fi 
+
+TTL=$2
+if [[ ! $TTL =~ ^-?[0-9]+$ ]]; then
+    TTL=300
+    echo "TTL is expected to be an integer at position two for script $0, not found, using $TTL" >> $LOG
+else
+    echo "TTL is set to '$TTL'" >> $LOG
+fi
+
 
 set_aws_meta_url() {
     if [ ! -z $murl_top ]; then
         echo "Already set AWS Meta URL to '$murl_top', nothing to do" >> $LOG
-        return
+        return 0
     fi
 
     echo "Setting AWS Meta URL" >> $LOG
@@ -17,12 +40,10 @@ set_aws_meta_url() {
 }
 
 source_route53_config_defaults() {
-    if [ ! -z $HOSTED_ZONE_ID ]; then
+    if [ -z $HOSTED_ZONE_ID ]; then
         echo "No Hosted Zone ID set, no need to reload route53 defaults" >> $LOG
-        return
+        return 0
     fi
-
-    ROUTE53_DEFAULT='/etc/default/route53'
 
     echo "Sourcing Route53 settings from $ROUTE53_DEFAULT" >> $LOG
 
@@ -41,7 +62,7 @@ set_hosted_zone_dn() {
 
     if [ ! -z $HOSTED_ZONE_DN ]; then
         echo "Already set HOSTED_ZONE_DN to '$HOSTED_ZONE_DN', nothing to do" >> $LOG
-        return
+        return 0
     fi
 
     echo "Setting Hosted Zone Domain Name" >> $LOG
@@ -51,7 +72,7 @@ set_hosted_zone_dn() {
 
     if [ -z $HOSTED_ZONE_ID ]; then
         echo "HOSTED_ZONE_ID not set, no HOSTED_ZONE_DN to lookup, nothing to do" >> $LOG
-        return
+        return 0
     fi
 
     # aws route53 get-hosted-zone seems a little unsteady sometimes - using a short retry cycle to compensate
@@ -74,7 +95,7 @@ set_hosted_zone_dn() {
     if [ -z $HOSTED_ZONE_DN ]; then
         attempts=$[this_retry-1]
         echo "Failed to get HOSTED_ZONE_DN after '$attempts' attempts, is '$HOSTED_ZONE_ID' the correct Hosted Zone Id?" >> $LOG
-        return
+        return 0
     fi
 
     ## Strip the last '.' which Route53 appends to the DN
@@ -87,7 +108,7 @@ set_hosted_zone_dn() {
 set_this_host() {
     if [ ! -z $THIS_HOST ]; then
         echo "Already set THIS_HOST to '$THIS_HOST', nothing to do" >> $LOG
-        return
+        return 0
     fi
 
     echo "Setting THIS_HOST" >> $LOG
@@ -103,12 +124,36 @@ set_this_host() {
 }
 
 
-maybe_append_domain_to_dhclient_conf() {
-    if [ ! -z $DH_CLIENT_CONF ]; then
-        echo "already updated '$DH_CLIENT_CONF', doing nothing" >> $LOG
-        return
-    fi
+add_dns_entry() {
+    source_route53_config_defaults
+    set_this_host 
 
+    echo "Creating DNS entry for $THIS_HOST" >> $LOG 
+    $SCRIPTDIR/route53/route53.sh --add
+}
+
+write_route53_default() {
+    # the downstream scripts (route53.sh) depend on this so we create it here and use it everywhere else
+    echo "Writing $ROUTE53_DEFAULT file, necessary for creating of DNS entries" >> $LOG
+
+    cat > $ROUTE53_DEFAULT << EOF
+TTL=${TTL}
+HOSTED_ZONE_ID=${HOSTED_ZONE_ID}
+EOF
+
+    if [ $? -ne 0 ]; then
+        echo "Failed to write to $ROUTE53_DEFAULT, aborting dns script" >>$LOG
+        exit 1
+    fi
+}
+
+modify_dhclient_for_dns() {
+
+    if [ ! -z $DH_CLIENT_CONF ]; then
+        echo "already done dhclient setup, doing nothing" >> $LOG
+        return 0
+    fi
+    
     set_hosted_zone_dn
 
     if [ -z $HOSTED_ZONE_DN ]; then
@@ -132,4 +177,33 @@ EOF
     echo "Updated $DH_CLIENT_CONF - renewing lease" >> $LOG
     dhclient -r
     dhclient
+ 
+    ## create the dns entry for this host 
 }
+
+register_route53_init() {
+
+    # TODO: Test for chkconfig support in centos and ubuntu
+    chkconfig --add route53
+    
+    # also ensure the lock file was created on first start so shutdown hooks work
+    touch $ROUTE53_SVC_LOCKFILE
+}
+
+main () {
+	echo "$0 script started at "`date` >> $LOG
+
+    write_route53_default
+    register_route53_init
+    add_dns_entry
+    modify_dhclient_for_dns
+    
+    echo "$0 script finished at "`date` >> $LOG
+}
+
+main
+exitCode=$?
+
+set +x
+
+exit $exitCode
