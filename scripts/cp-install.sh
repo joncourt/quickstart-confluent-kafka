@@ -98,7 +98,7 @@ fi
 install_confluent_from_tarball() {
     [ -d $CP_HOME ] && return 0
 
-    echo "Installing Confluent Platform" >> $LOG
+    echo "Installing Confluent Platform from tarball" >> $LOG
 
     curl -f -L -o /tmp/$CP_TARBALL $CP_TARBALL_URI
 
