@@ -254,10 +254,10 @@ configure_confluent_zk() {
     echo "Configuring Confluent Zookeeper" >> $LOG
 	
 	grep -q ^initLimit $ZK_CFG
-	[ $? -ne 0 ] && echo "initLimit=5" >> $ZK_CFG
+	[ $? -ne 0 ] && echo "initLimit=20" >> $ZK_CFG
 
 	grep -q ^syncLimit $ZK_CFG
-	[ $? -ne 0 ] && echo "syncLimit=2" >> $ZK_CFG
+	[ $? -ne 0 ] && echo "syncLimit=20" >> $ZK_CFG
 
 	myid=0
 	zidx=1
@@ -1022,7 +1022,10 @@ wait_for_topic() {
 	local topic=${1:-}
     local TOPIC_WAIT=${2:-300}
 
-	[ -z "$topic" ] && return
+    
+    echo "Waiting for topic $topic for $TOPIC_WAIT millis" >> $LOG
+
+    [ -z "$topic" ] && return
 
     SWAIT=$TOPIC_WAIT
     STIME=5
