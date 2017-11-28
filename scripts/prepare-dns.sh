@@ -167,18 +167,18 @@ modify_dhclient_for_dns() {
 
     # TODO: Add paths to dhclient.conf for Ubuntu and Centos
 
+    INTERFACE_NAME=eth0
+    
     cat >> $DH_CLIENT_CONF <<EOF
-interface "eth0" {
+interface "$INTERFACE_NAME" {
     supersede domain-name "$HOSTED_ZONE_DN";
     supersede domain-search "$HOSTED_ZONE_DN";
 }
 EOF
 
-    echo "Updated $DH_CLIENT_CONF - renewing lease" >> $LOG
-    dhclient -r
-    dhclient
- 
-    ## create the dns entry for this host 
+    echo "Updated $DH_CLIENT_CONF - renewing lease for '$INTERFACE_NAME'" >> $LOG
+    dhclient -r $INTERFACE_NAME
+    dhclient $INTERFACE_NAME
 }
 
 register_route53_init() {
