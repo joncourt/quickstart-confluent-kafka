@@ -219,10 +219,9 @@ register_route53_init() {
     case "$LINUX_FLAVOR" in
         ubuntu)
             # add the startup hook
-            update-rc.d route53 defaults
-
-            service route53 start
-
+            systemctl enable route53 >> %LOG
+            systemctl start route53 >> $LOG
+            
 #            # add the shutdown hook(s)
 #            ln -s /etc/rc0.d/K99route53 route53
 #            ln -s /etc/rc6.d/K99route53 route53
@@ -238,6 +237,7 @@ register_route53_init() {
 
             # link a shutdown hook
             ln -s /etc/rc.d/init.d/route53 /etc/rc.d/rc.shutdown
+            
             systemctl start route53 >> $LOG
             ;;
         *)
@@ -250,7 +250,6 @@ main () {
 	echo "$0 script started at "`date` >> $LOG
 
     write_route53_default
-#    add_dns_entry
     modify_dhclient_for_dns
     register_route53_init
     
