@@ -11,35 +11,47 @@
 # Short-Description: Add and/or remove a DNS entry in Route53
 ### END INIT INFO
 
+# Credit to Krzysztof Wilczynski for the base of this script - taken from https://gist.github.com/kwilczynski/1a197cbd093113c75560
+
+
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-SCRIPT_NAME="/etc/init.d/$(basename -- $0)"
+SERVICE_NAME=route53
 
 ROUTE53_BINARY="/tmp/sbin/route53/route53.sh"
+LOCKFILE=/var/lock/subsys/$SERVICE_NAME
 
 case "$1" in
     start)
         # Lockfile is necessary for shutdown hook to work
         # TODO: ensure the lockfile location is correct also for Centos and Ubuntu
-        LOCKFILE=/var/lock/subsys/route53
         touch $LOCKFILE
         $ROUTE53_BINARY --add >/dev/null 2>&1
-    ;;
+        echo "Created DNS entry"
+        exit 0
+        ;;
     stop)
         $ROUTE53_BINARY --check >/dev/null 2>&1
         case $? in
             0)
                 $ROUTE53_BINARY --remove >/dev/null 2>&1
                 echo "Removed DNS entry"
-            ;;
-            1) echo "Failed to remove DNS entry - code $?" ;;
+                exit 0
+                ;;
+            *) 
+                echo "Failed to remove DNS entry - code $?" 
+                exit 0
+                ;;
+               
         esac
-    ;;
+        ;;
+        
     status)
-        $ROUTE53_BINARY --check >/dev/null 2>&1
-    ;;
+        $ROUTE53_BINARY --check
+        ;;
+        
     *)
-        echo "Usage: $SCRIPT_NAME {start|stop|status}" >&2
-        exit 3
-    ;;
+        echo "Usage: service $SERVICE_NAME {start|stop|status}" >&2
+        exit 0
+        ;;
 esac

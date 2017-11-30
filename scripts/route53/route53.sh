@@ -14,9 +14,9 @@
 #   - Perform a look-up against the Route53 to check whether
 #     a correct DNS entry exists there already, and report back.
 #
-# This script is to be installed as /usr/local/sbin/route53.
-#
-LOG=/tmp/cp-install.log
+# Credit to Krzysztof Wilczynski for the base of this script - taken from https://gist.github.com/kwilczynski/1a197cbd093113c75560
+
+LOG=/tmp/cp-route53.log
 
 export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
