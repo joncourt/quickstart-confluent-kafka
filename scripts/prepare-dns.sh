@@ -146,21 +146,21 @@ set_linux_flavor() {
         return
     fi
 
-    LINUX_ISSUE=$(python -mplatform)
+    LINUX_ISSUE="$(python -mplatform):$(uname -a):$(cat /etc/issue)"
 
-    echo $LINUX_ISSUE | grep -qi ubuntu >> /dev/null
+    echo $LINUX_ISSUE | grep -qi ubuntu
     case "$?" in
         0)
             LINUX_FLAVOR="ubuntu"
             ;;
         *)
-            echo $LINUX_ISSUE | grep -qi amazon >> /dev/null
+            echo $LINUX_ISSUE | grep -qi amazon
             case "$?" in
                 0)
                     LINUX_FLAVOR="amazon"
                     ;;
                 *)
-                    echo $LINUX_ISSUE | grep -qi centos >> /dev/null
+                    echo $LINUX_ISSUE | grep -qi centos
                     case "$?" in
                         0)
                             LINUX_FLAVOR="centos"
