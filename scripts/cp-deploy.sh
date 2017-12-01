@@ -254,10 +254,10 @@ configure_confluent_zk() {
     echo "Configuring Confluent Zookeeper" >> $LOG
 	
 	grep -q ^initLimit $ZK_CFG
-	[ $? -ne 0 ] && echo "initLimit=20" >> $ZK_CFG
+	[ $? -ne 0 ] && echo "initLimit=5" >> $ZK_CFG
 
 	grep -q ^syncLimit $ZK_CFG
-	[ $? -ne 0 ] && echo "syncLimit=20" >> $ZK_CFG
+	[ $? -ne 0 ] && echo "syncLimit=2" >> $ZK_CFG
 
 	myid=0
 	zidx=1
