@@ -61,6 +61,8 @@ set -x
 THIS_SCRIPT=`readlink -f $0`
 SCRIPTDIR=`dirname ${THIS_SCRIPT}`
 
+source $SCRIPTDIR/cp-common.sh
+
 LOG=/tmp/cp-deploy.log
 
 # Extract useful details from the AWS MetaData
@@ -195,51 +197,6 @@ archive_cfg() {
 	cp -p $CONTROL_CENTER_CFG $backup_dir
 }
 
-# Add/update config file parameter
-#	$1 : config file
-#	$2 : property
-#	$3 : new value
-#	$4 (optional) : 0: delete old value; 1[default]: retain old value 
-#
-# The sed logic in this functions works given following limitations
-#	1. At most one un-commented setting for a given parameter
-#	2. If ONLY commented values exist, the FIRST ONE will be overwritten
-#
-set_property() {
-	[ ! -f $1 ] && return 1
-
-	local cfgFile=$1
-	local property=$2
-	local newValue=$3
-	local doArchive=${4:-1}
-
-	grep -q "^${property}=" $cfgFile
-	overwriteMode=$?
-
-	grep -q "^#${property}=" $cfgFile
-	restoreMode=$?
-
-
-	if [ $overwriteMode -eq 0 ] ; then
-		if [ $doArchive -ne 0 ] ; then
-				# Add the new setting, then comment out the old
-			sed -i "/^${property}=/a ${property}=$newValue" $cfgFile
-			sed -i "0,/^${property}=/s|^${property}=|# ${property}=|" $cfgFile
-		else
-			sed -i "s|^${property}=.*$|${property}=${newValue}|" $cfgFile
-		fi
-	elif [ $restoreMode -eq 0 ] ; then
-				# "Uncomment" first entry, then replace it
-				# This helps us by leaving the setting in the same place in the file
-		sed -i "0,/^#${property}=/s|^#${property}=|${property}=|" $cfgFile
-		sed -i "s|^${property}=.*$|${property}=${newValue}|" $cfgFile
-	else 
-		echo "" >> $cfgFile
-		echo "${property}=${newValue}" >> $cfgFile
-
-	fi
-}
-
 
 
 # A series of sub-functions to update the key properties
@@ -359,6 +316,9 @@ configure_kafka_broker() {
 		set_property $BROKER_CFG "confluent.metrics.reporter.bootstrap.servers" "$bconnect"
 		set_property $BROKER_CFG "confluent.metrics.reporter.zookeeper.connect" "$zconnect" 
 	fi
+	
+	set_this_fqdn
+	set_property $BROKER_CFG "advertised.listeners" "PLAINTEXT://$THIS_FQDN:9092" 0
 }
 
 configure_schema_registry() {

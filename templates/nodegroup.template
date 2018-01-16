@@ -369,6 +369,15 @@
                 "AWS::CloudFormation::Init": {
                     "config": {
                         "files": {
+                            "/tmp/sbin/cp-common.sh": {
+                                "source": {
+                                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/cp-common.sh"
+                                },
+                                "mode": "000755",
+                                "owner": "root",
+                                "group": "root",
+                                "authentication": "S3AccessCreds"
+                            },
                             "/tmp/sbin/compute-heap-opts": {
                                 "source": {
                                     "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/compute-heap-opts"
@@ -806,12 +815,10 @@
                                 "\n",
                                 "AMI_SBIN=/tmp/sbin \n",
                                 "\n",
-                                "## Preparing DNS - note requires /etc/default/route53 file to have been filled\n",
+                                "## Preparing DNS \n",
                                 "$AMI_SBIN/prepare-dns.sh ",
-                                {
-                                    "Ref": "HostedZoneId"
-                                },
-                                " 300 \n",
+                                " -z ", { "Ref": "HostedZoneId" },
+                                " -t 300 \n",
                                 "\n",
                                 "## Prepare the instance \n",
                                 "$AMI_SBIN/prep-cp-instance.sh \n",

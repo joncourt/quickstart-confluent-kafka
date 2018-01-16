@@ -69,7 +69,7 @@ if [ -z "$ThisStack" ] ; then
 	echo "No AWS Cloudformation Stack specified; aborting script"
 	exit 1
 elif [ -z "$ThisRegion" ] ; then
-	echo "Failed to determine AWS region; aborthing script"
+	echo "Failed to determine AWS region; aborting script"
 	exit 1
 # elif [ -z "$ThisKeyPair" ] ; then
 # 	echo "No KeyPair specified; aborting script"
