@@ -35,7 +35,7 @@
 #
 # Input (env vars)
 #	S3_REGION (default is us-west-2, though we'll look to bucket location if possible)
-#	CP_VERSION (default is 3.1.1, if can't be determined otherwise)
+#	CP_VERSION (default is 3.3.1, if can't be determined otherwise)
 #	
 # usage:
 #	retrieve-connect-jars.sh <s3_bucket | URL>
@@ -70,7 +70,7 @@ elif [ -f $CP_HOME/share/confluent-common/doc/confluent-common/version.txt ] ; t
 	CV=${CV%%-*}
 	CP_VERSION=${CV#v}
 else
-	CP_VERSION=${CP_VERSION:-3.1.1}
+	CP_VERSION=${CP_VERSION:-3.3.1}
 fi
 
 S3_REGION=${S3_REGION:-us-west-2}

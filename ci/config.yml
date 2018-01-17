@@ -42,7 +42,7 @@ tests:
       - sa-east-1
     template_file: confluent-kafka-master.template
   test4:
-    parameter_input: enterprise-3.1.2-brokersworkerszookeepers-spot-ebs-amzn.json
+    parameter_input: enterprise-4.0.0-brokersworkerszookeepers-spot-ebs-amzn.json
     regions:
       - us-east-1
       - us-east-2
