@@ -514,10 +514,12 @@ configure_workers() {
 	if [ $? -eq 0 ] ; then
 		if [ -d $CP_HOME/share/java ] ; then
 			KC_PLUGIN_DIR=${CP_HOME}/share/java/kc-plugins
+			KC_PLUGIN_PATH=$CP_HOME/share/java,$KC_PLUGIN_DIR
 		else
 			KC_PLUGIN_DIR=/usr/share/java/kc-plugins
+			KC_PLUGIN_PATH=/usr/share/java,$KC_PLUGIN_DIR
 		fi
-		mkdir $KC_PLUGIN_DIR
+		mkdir -p $KC_PLUGIN_DIR
 	fi
 
 	if [ -f $KAFKA_CONNECT_CFG ] ; then
@@ -534,8 +536,8 @@ configure_workers() {
 		set_property $KAFKA_CONNECT_CFG  "consumer.interceptor.classes" "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor" 
 		set_property $KAFKA_CONNECT_CFG  "producer.interceptor.classes" "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor" 
 
-		[ -n "$KC_PLUGIN_DIR" ] && [ -d "$KC_PLUGIN_DIR" ] \
-			&& set_property $KAFKA_CONNECT_CFG "plugin.path" "$KC_PLUGIN_DIR"
+		[ -n "$KC_PLUGIN_PATH" ] && [ -d "$KC_PLUGIN_DIR" ] \
+			&& set_property $KAFKA_CONNECT_CFG "plugin.path" "$KC_PLUGIN_PATH"
 	fi
 
 		# There are multiple "connect-*.properties" files in
